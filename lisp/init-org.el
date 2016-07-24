@@ -70,6 +70,13 @@
   (cond ((buffer-narrowed-p) (widen))
         ((region-active-p) (narrow-to-region (region-beginning) (region-end)))
         ((equal major-mode 'org-mode) (org-narrow-to-subtree))
+        ((equal major-mode 'diff-mode)
+         (let (b e)
+           (save-excursion
+             (setq b (diff-beginning-of-file))
+             (setq e (progn (diff-end-of-file) (point))))
+           (when (and b e (< b e))
+             (narrow-to-region b e))))
         (t (error "Please select a region to narrow to"))))
 
 ;; Various preferences
@@ -148,8 +155,11 @@
   (enable-flyspell-mode-conditionally)
 
   ;; but I don't want to auto spell check when typing,
-  ;; please comment out `(flyspell-mode -1)` if prefer auto spell check
+  ;; please comment out `(flyspell-mode -1)` if you prefer auto spell check
   (flyspell-mode -1)
+
+  ;; for some reason, org8 disable odt export by default
+  (add-to-list 'org-export-backends 'odt)
 
   ;; don't spell check double words
   (setq flyspell-check-doublon nil)
@@ -184,5 +194,12 @@
       '(elisp "lisp"
               emacs-lisp "lisp"))
 ;; }}
+
+(defun org-demote-or-promote (&optional is-promote)
+  (interactive "P")
+  (unless (region-active-p)
+    (org-mark-subtree))
+  (if is-promote (org-do-promote)
+    (org-do-demote)))
 
 (provide 'init-org)

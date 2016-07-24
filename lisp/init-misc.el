@@ -1,8 +1,4 @@
 ;; {{ swiper&ivy-mode
-(autoload 'ivy-recentf "ivy" "" t)
-(autoload 'ivy-read "ivy")
-(autoload 'swiper "swiper" "" t)
-
 (defun swiper-the-thing ()
   (interactive)
   (swiper (if (region-active-p)
@@ -82,11 +78,36 @@
 
 
 ;; {{ find-file-in-project (ffip)
+(defun my-git-show-selected-commit ()
+  "Run 'git show selected-commit' in shell"
+  (let* ((git-cmd "git --no-pager log --date=short --pretty=format:'%h|%ad|%s|%an'")
+         (git-cmd-rlts (split-string (shell-command-to-string git-cmd) "\n" t))
+         (line (ivy-read "git log:" git-cmd-rlts)))
+    (shell-command-to-string (format "git show %s"
+                                     (car (split-string line "|" t))))))
+
+(defun my-git-log-patch-current-file ()
+  "Run 'git log -p --author=whoever' in shell"
+  (let* ((git-cmd-shortlog "git --no-pager log --format='%aN' | sort -u")
+         (git-cmd-shortlog-rlts (split-string (shell-command-to-string git-cmd-shortlog) "\n" t))
+         (original-author-name (ivy-read "git authors:" git-cmd-shortlog-rlts))
+         (git-cmd-log-dash-p (concat "git --no-pager log --no-color --date=short --pretty=format:'%h%d %ad %s (%an)'"
+                                      (format " --author='%s'" original-author-name)
+                                      (format " -p %s" (buffer-file-name)))))
+    (shell-command-to-string git-cmd-log-dash-p)))
+
 (autoload 'find-file-in-project "find-file-in-project" "" t)
 (autoload 'find-file-in-project-by-selected "find-file-in-project" "" t)
 (autoload 'ffip-get-project-root-directory "find-file-in-project" "" t)
 (setq ffip-match-path-instead-of-filename t)
-
+;; I only use git
+(setq ffip-diff-backends '(my-git-show-selected-commit
+                           my-git-log-patch-current-file
+                           "cd $(git rev-parse --show-toplevel) && git diff"
+                           "cd $(git rev-parse --show-toplevel) && git diff --cached"
+                           (shell-command-to-string (format "cd $(git rev-parse --show-toplevel) && git --no-pager log --date=short -S'%s' -p"
+                                                            (read-string "Git search string:")))
+                           (car kill-ring)))
 (defun neotree-project-dir ()
   "Open NeoTree using the git root."
   (interactive)
@@ -97,33 +118,6 @@
           (neotree-dir project-dir)
           (neotree-find file-name))
       (message "Could not find git project root."))))
-
-(defvar my-grep-extra-opts
-  "--exclude-dir=.git --exclude-dir=.bzr --exclude-dir=.svn"
-  "Extra grep options passed to `my-grep'")
-
-(defun my-grep ()
-  "Grep file at project root directory or current directory"
-  (interactive)
-  (let ((keyword (if (region-active-p)
-                     (buffer-substring-no-properties (region-beginning) (region-end))
-                   (read-string "Enter grep pattern: ")))
-        cmd collection val 1st root)
-
-    (let ((default-directory (setq root (or (and (fboundp 'ffip-get-project-root-directory)
-                                                 (ffip-get-project-root-directory))
-                                            default-directory))))
-      (setq cmd (format "%s -rsn %s \"%s\" *"
-                        grep-program my-grep-extra-opts keyword))
-      (when (and (setq collection (split-string
-                                   (shell-command-to-string cmd)
-                                   "\n"
-                                   t))
-                 (setq val (ivy-read (format "matching \"%s\" at %s:" keyword root) collection))))
-      (setq lst (split-string val ":"))
-      (find-file (car lst))
-      (goto-char (point-min))
-      (forward-line (1- (string-to-number (cadr lst)))))))
 ;; }}
 
 ;; {{ groovy-mode
@@ -176,7 +170,7 @@
   (interactive)
   (dictionary-new-search (cons (if (region-active-p)
                                    (buffer-substring-no-properties (region-beginning) (region-end))
-                                 (thing-at-point 'symbol)) dictionary-default-dictionary)))
+                                 (read-string "Input word for dict.org:")) dictionary-default-dictionary)))
 
 ;; }}
 
@@ -208,63 +202,40 @@
 ;; don't let the cursor go into minibuffer prompt
 (setq minibuffer-prompt-properties (quote (read-only t point-entered minibuffer-avoid-prompt face minibuffer-prompt)))
 
-;;Don't echo passwords when communicating with interactive programs:
+;; Don't echo passwords when communicating with interactive programs:
+;; Github prompt is like "Password for 'https://user@github.com/':"
+(setq comint-password-prompt-regexp (format "%s\\|^ *Password for .*: *$" comint-password-prompt-regexp))
 (add-hook 'comint-output-filter-functions 'comint-watch-for-password-prompt)
 
-;; {{ guide-key-mode
-(require 'guide-key)
-(setq guide-key/guide-key-sequence
-      '("C-x v" ; VCS commands
-        "C-c"
-        ",a"
-        ",b"
-        ",c"
-        ",d"
-        ",e"
-        ",f"
-        ",g"
-        ",h"
-        ",i"
-        ",j"
-        ",k"
-        ",l"
-        ",m"
-        ",n"
-        ",o"
-        ",p"
-        ",q"
-        ",r"
-        ",s"
-        "/" ; gnus limit
-        ",t"
-        ",u"
-        ",v"
-        ",w"
-        ",x"
-        ",y"
-        ",z"))
-(guide-key-mode 1)  ; Enable guide-key-mode
-(setq guide-key/recursive-key-sequence-flag t)
-(setq guide-key/idle-delay 0.5)
+;; {{ which-key-mode
+(require 'which-key)
+(setq which-key-separator ":")
+(which-key-mode 1)
 ;; }}
 
 (defun generic-prog-mode-hook-setup ()
+  ;; turn of `linum-mode' when there are more than 5000 lines
+  (if (> (buffer-size) (* 5000 80))
+      (linum-mode -1))
+
   (unless (is-buffer-file-temp)
     ;; fic-mode has performance issue on 5000 line C++, we can always use swiper instead
     ;; don't spell check double words
     (setq flyspell-check-doublon nil)
-	;; enable for all programming modes
-	;; http://emacsredux.com/blog/2013/04/21/camelcase-aware-editing/
-	(subword-mode)
+    ;; enable for all programming modes
+    ;; http://emacsredux.com/blog/2013/04/21/camelcase-aware-editing/
+    (subword-mode)
     (setq-default electric-pair-inhibit-predicate 'electric-pair-conservative-inhibit)
     (electric-pair-mode 1)
 
     ;; eldoc, show API doc in minibuffer echo area
-	(turn-on-eldoc-mode)
-	;; show trailing spaces in a programming mod
-	(setq show-trailing-whitespace t)))
+    ;; (turn-on-eldoc-mode)
+    ;; show trailing spaces in a programming mod
+    (setq show-trailing-whitespace t)))
 
 (add-hook 'prog-mode-hook 'generic-prog-mode-hook-setup)
+;; some major-modes NOT inherited from prog-mode
+(add-hook 'css-mode-hook 'generic-prog-mode-hook-setup)
 
 ;; {{ display long lines in truncated style (end line with $)
 (defun truncate-lines-setup ()
@@ -310,23 +281,34 @@
 (if (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 
+(defun my-download-subtitles ()
+  (interactive)
+  (shell-command "periscope.py -l en *.mkv *.mp4 *.avi &"))
+
+
 ;; {{ @see http://emacsredux.com/blog/2013/04/21/edit-files-as-root/
 (defun sudo-edit (&optional arg)
   "Edit currently visited file as root.
 With a prefix ARG prompt for a file to visit.
 Will also prompt for a file to visit if current
-buffer is not visiting a file."
+buffer is not visiting a file.
+You may insert below line into ~/.authinfo.gpg to type less:
+machine 127.0.0.1 login root password ****** port sudo
+See \"Reusing passwords for several connections\" from INFO.
+"
   (interactive "P")
   (if (or arg (not buffer-file-name))
-      (find-file (concat "/sudo:root@localhost:"
-                         (ido-read-file-name "Find file(as root): ")))
-    (find-alternate-file (concat "/sudo:root@localhost:" buffer-file-name))))
+      (find-file (concat "/sudo:root@127.0.0.1:"
+                         (read-file-name "Find file(as root): ")))
+    (find-alternate-file (concat "/sudo:@127.0.0.1:"
+                                 buffer-file-name))))
 
 (defadvice ido-find-file (after find-file-sudo activate)
   "Find file as root if necessary."
   (unless (and buffer-file-name
                (file-writable-p buffer-file-name))
-    (find-alternate-file (concat "/sudo:root@localhost:" buffer-file-name))))
+    (find-alternate-file (concat "/sudo:root@127.0.0.1:"
+                                 buffer-file-name))))
 ;; }}
 
 ;; input open source license
@@ -439,6 +421,21 @@ buffer is not visiting a file."
       recentf-exclude '("/tmp/"
                         "/ssh:"
                         "/sudo:"
+                        ;; ctags
+                        "/TAGS$"
+                        ;; global
+                        "/GTAGS$"
+                        "/GRAGS$"
+                        "/GPATH$"
+                        ;; binary
+                        "\\.mkv$"
+                        "\\.mp[34]$"
+                        "\\.avi$"
+                        "\\.pdf$"
+                        ;; sub-titles
+                        "\\.sub$"
+                        "\\.srt$"
+                        "\\.ass$"
                         ;; ~/.emacs.d/**/*.el included
                         ;; "/home/[a-z]\+/\\.[a-df-z]" ; configuration file should not be excluded
                         ))
@@ -448,7 +445,13 @@ buffer is not visiting a file."
 (autoload 'which-function "which-func")
 (autoload 'popup-tip "popup")
 
+(defun my-which-file ()
+  "Return current file name for Yasnippets."
+  (if (buffer-file-name) (format "%s:" (file-name-nondirectory (buffer-file-name)))
+    ""))
+
 (defun my-which-function ()
+  "Return current function name."
   ;; clean the imenu cache
   ;; @see http://stackoverflow.com/questions/13426564/how-to-force-a-rescan-in-imenu-by-a-function
   (setq imenu--index-alist nil)
@@ -504,13 +507,6 @@ buffer is not visiting a file."
 
 ;; {{ avy, jump between texts, like easymotion in vim
 ;; @see http://emacsredux.com/blog/2015/07/19/ace-jump-mode-is-dead-long-live-avy/ for more tips
-;; emacs key binding, copied from avy website
-;; evil, my favorite
-(eval-after-load "evil"
-  '(progn
-     ;; press "d " to delete to the word
-     (define-key evil-motion-state-map (kbd ";") #'avy-goto-subword-1)
-     (define-key evil-normal-state-map (kbd ";") 'avy-goto-subword-1)))
 ;; dired
 (eval-after-load "dired"
   '(progn
@@ -543,15 +539,6 @@ buffer is not visiting a file."
           (setq rlt t)))
     rlt))
 
-;; {{ tramp setup
-;; @see http://www.quora.com/Whats-the-best-way-to-edit-remote-files-from-Emacs
-(setq tramp-default-method "ssh")
-(setq tramp-auto-save-directory "~/.backups/tramp/")
-(setq tramp-chunksize 8192)
-;; @see https://github.com/syl20bnr/spacemacs/issues/1921
-(setq tramp-ssh-controlmaster-options
-      "-o ControlMaster=auto -o ControlPath='tramp.%%C' -o ControlPersist=no")
-;; }}
 
 ;; {{
 (defun goto-edge-by-comparing-font-face (&optional step)
@@ -576,28 +563,40 @@ If step is -1, go backward."
 ;; }}
 
 (defun my-minibuffer-setup-hook ()
-  ;; Use paredit in the minibuffer
-  (conditionally-paredit-mode 1)
   (local-set-key (kbd "M-y") 'paste-from-x-clipboard)
   (local-set-key (kbd "C-k") 'kill-line)
   (setq gc-cons-threshold most-positive-fixnum))
 
 (defun my-minibuffer-exit-hook ()
   ;; evil-mode also use minibuf
-  (conditionally-paredit-mode -1)
   (setq gc-cons-threshold best-gc-cons-threshold))
 
 ;; @see http://bling.github.io/blog/2016/01/18/why-are-you-changing-gc-cons-threshold/
 (add-hook 'minibuffer-setup-hook #'my-minibuffer-setup-hook)
 (add-hook 'minibuffer-exit-hook #'my-minibuffer-exit-hook)
 
+
+;; {{ string-edit-mode
+(autoload 'string-edit-at-point "string-edit" "" t nil)
 (defun string-edit-at-point-hook-setup ()
-  (web-mode))
+  (let ((major-mode-list (remove major-mode '(web-mode js2-mode js-mode css-mode emacs-lisp-mode)))
+        (str (buffer-substring-no-properties (point-min) (point-max))))
+    ;; (ivy-read "directories:" collection :action 'dired)
+    ;; (message "original=%s" (se/find-original))
+    ;; (message "major-mode-list=%s major-mode=%s" major-mode-list major-mode)
+    (save-excursion
+      (cond
+       ((string-match-p "<[a-zA-Z]" str)
+        (web-mode))
+       ((string-match-p "function(\\| var \\|" str)
+        (js-mode))))))
 (add-hook 'string-edit-at-point-hook 'string-edit-at-point-hook-setup)
+;; }}
 
 ;; Diff two regions
 ;; Step 1: Select a region and `M-x diff-region-tag-selected-as-a'
 ;; Step 2: Select another region and `M-x diff-region-compare-with-b'
+;; Press "q" in evil-mode or "C-c C-c" to exit the diff output buffer
 (defun diff-region-format-region-boundary (b e)
   "Make sure lines are selected and B is less than E"
   (let (tmp rlt)
@@ -655,25 +654,19 @@ If step is -1, go backward."
           (setq tmp (diff-region-format-region-boundary (region-beginning) (region-end)))
           (write-region (car tmp) (cadr tmp) fb))
 
-        (setq rlt-buf (get-buffer-create "*Diff-region-output*"))
         (when (and fa (file-exists-p fa) fb (file-exists-p fb))
           ;; save region A as file A
           (save-current-buffer
             (set-buffer (get-buffer-create "*Diff-regionA*"))
             (write-region (point-min) (point-max) fa))
           ;; diff NOW!
-          (setq diff-output (shell-command-to-string (format "diff -Nabur %s %s" fa fb)))
           ;; show the diff output
-          (if (string= diff-output "")
+          (if (string= (setq diff-output (shell-command-to-string (format "diff -Nabur %s %s" fa fb))) "")
               ;; two regions are same
               (message "Two regions are SAME!")
             ;; show the diff
-            (save-current-buffer
-              (switch-to-buffer-other-window rlt-buf)
-              (set-buffer rlt-buf)
-              (erase-buffer)
-              (insert diff-output)
-              (diff-mode))))
+            (diff-region-open-diff-output diff-output
+                                          "*Diff-region-output*")))
 
         ;; clean the temporary files
         (if (and fa (file-exists-p fa))
@@ -681,5 +674,30 @@ If step is -1, go backward."
         (if (and fb (file-exists-p fb))
             (delete-file fb)))
     (message "Please select region at first!")))
+
+;; cliphist.el
+(setq cliphist-use-ivy t)
+
+;; subtitles.el
+(autoload 'srt-renumber-subtitles "subtitles" "" t)
+(autoload 'srt-offset-subtitles "subtitles" "" t)
+(autoload 'srt-mult-subtitles "subtitles" "" t)
+(autoload 'srt-convert-sub-to-srt "subtitles" "" t)
+
+;; fastdef.el
+(autoload 'fastdef-insert "fastdef" nil t)
+(autoload 'fastdef-insert-from-history "fastdef" nil t)
+
+;; indention management
+(defun my-toggle-indentation ()
+  (interactive)
+  (setq indent-tabs-mode (not indent-tabs-mode))
+  (message "indent-tabs-mode=%s" indent-tabs-mode))
+
+;; {{ auto-save.el
+(require 'auto-save)
+(auto-save-enable)
+(setq auto-save-slient t)
+;; }}
 
 (provide 'init-misc)

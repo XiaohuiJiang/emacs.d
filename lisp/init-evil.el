@@ -23,12 +23,36 @@
 ;; here is the workaround
 (setq evil-default-cursor t)
 
+;; {{ multiple-cursors
+;; step 1, select thing in visual-mode
+;; step 2, `mc/mark-all-like-this' or `mc/mark-all-like-this-in-defun'
+;; step 3, `ace-mc-add-multiple-cursors' to remove cursor, press RET to confirm
+;; step 4, press s or S to start replace
+;; step 5, press C-g to quit multiple-cursors
+(define-key evil-visual-state-map (kbd "mn") 'mc/mark-next-like-this)
+(define-key evil-visual-state-map (kbd "ma") 'mc/mark-all-like-this)
+(define-key evil-visual-state-map (kbd "md") 'mc/mark-all-like-this-in-defun)
+(define-key evil-visual-state-map (kbd "mm") 'ace-mc-add-multiple-cursors)
+(define-key evil-visual-state-map (kbd "ms") 'ace-mc-add-single-cursor)
+;; }}
+
 ;; enable evil-mode
 (evil-mode 1)
 
 ;; {{ @see https://github.com/timcharper/evil-surround for tutorial
 (require 'evil-surround)
 (global-evil-surround-mode 1)
+(defun evil-surround-prog-mode-hook-setup ()
+  (push '(47 . ("/" . "/")) evil-surround-pairs-alist)
+  (push '(40 . ("(" . ")")) evil-surround-pairs-alist)
+  (push '(41 . ("(" . ")")) evil-surround-pairs-alist))
+(add-hook 'prog-mode-hook 'evil-surround-prog-mode-hook-setup)
+(defun evil-surround-emacs-lisp-mode-hook-setup ()
+  (push '(?` . ("`" . "'")) evil-surround-pairs-alist))
+(add-hook 'emacs-lisp-mode-hook 'evil-surround-emacs-lisp-mode-hook-setup)
+(defun evil-surround-org-mode-hook-setup ()
+  (push '(?= . ("=" . "=")) evil-surround-pairs-alist))
+(add-hook 'org-mode-hook 'evil-surround-org-mode-hook-setup)
 ;; }}
 
 ;; {{ For example, press `viW*`
@@ -37,19 +61,19 @@
 (global-evil-visualstar-mode t)
 ;; }}
 
-;; {{ https://github.com/gabesoft/evil-mc
-;; `grm' create cursor for all matching selected
-;; `gru' undo all cursors
-;; `grs' pause cursor
-;; `grr' resume cursor
-;; `grh' make cursor here
-;; `C-p', `C-n' previous cursor, next cursor
-(require 'evil-mc)
-(global-evil-mc-mode 1)
-;; }}
+
+;; ffip-diff-mode evil setup
+(defun ffip-diff-mode-hook-setup ()
+    (evil-local-set-key 'normal "p" 'diff-hunk-prev)
+    (evil-local-set-key 'normal "n" 'diff-hunk-next)
+    (evil-local-set-key 'normal "P" 'diff-file-prev)
+    (evil-local-set-key 'normal "N" 'diff-file-next)
+    (evil-local-set-key 'normal "q" 'ffip-diff-quit)
+    (evil-local-set-key 'normal (kbd "RET") 'ffip-diff-find-file)
+    (evil-local-set-key 'normal "o" 'ffip-diff-find-file))
+(add-hook 'ffip-diff-mode-hook 'ffip-diff-mode-hook-setup)
 
 (require 'evil-mark-replace)
-
 
 ;; {{ define my own text objects, works on evil v1.0.9 using older method
 ;; @see http://stackoverflow.com/questions/18102004/emacs-evil-mode-how-to-create-a-new-text-object-to-select-words-with-any-non-sp
@@ -66,8 +90,12 @@
 
 ;; between dollar signs:
 (define-and-bind-text-object "$" "\\$" "\\$")
+;; between equal signs
+(define-and-bind-text-object "=" "=" "=")
 ;; between pipe characters:
 (define-and-bind-text-object "|" "|" "|")
+;; regular expression
+(define-and-bind-text-object "/" "/" "/")
 ;; trimmed line
 (define-and-bind-text-object "l" "^ *" " *$")
 ;; angular template
@@ -216,15 +244,10 @@ If the character before and after CH is space or tab, CH is NOT slash"
 
 ;; {{ https://github.com/syl20bnr/evil-escape
 (require 'evil-escape)
-(setq-default evil-escape-delay 0.2)
+(setq-default evil-escape-delay 0.5)
 (setq evil-escape-excluded-major-modes '(dired-mode))
 (setq-default evil-escape-key-sequence "kj")
 (evil-escape-mode 1)
-;; }}
-
-;; {{ evil-space
-(require 'evil-space)
-(evil-space-mode)
 ;; }}
 
 ;; Move back the cursor one position when exiting insert mode
@@ -246,8 +269,8 @@ If the character before and after CH is space or tab, CH is NOT slash"
   "gl" 'outline-next-visible-heading
   "$" 'org-end-of-line ; smarter behaviour on headlines etc.
   "^" 'org-beginning-of-line ; ditto
-  "<" 'org-metaleft ; out-dent
-  ">" 'org-metaright ; indent
+  "<" (lambda () (interactive) (org-demote-or-promote 1)) ; out-dent
+  ">" 'org-demote-or-promote ; indent
   (kbd "TAB") 'org-cycle)
 
 (loop for (mode . state) in
@@ -276,6 +299,7 @@ If the character before and after CH is space or tab, CH is NOT slash"
         (weibo-timeline-mode . emacs)
         (weibo-post-mode . emacs)
         (sr-mode . emacs)
+        (profiler-report-mode . emacs)
         (dired-mode . emacs)
         (compilation-mode . emacs)
         (speedbar-mode . emacs)
@@ -295,14 +319,16 @@ If the character before and after CH is space or tab, CH is NOT slash"
 (define-key evil-ex-completion-map (kbd "M-n") 'next-complete-history-element)
 
 (define-key evil-normal-state-map "Y" (kbd "y$"))
-(define-key evil-normal-state-map "+" 'evil-numbers/inc-at-pt)
-(define-key evil-normal-state-map "-" 'evil-numbers/dec-at-pt)
 (define-key evil-normal-state-map "go" 'goto-char)
 (define-key evil-normal-state-map (kbd "M-y") 'browse-kill-ring)
 (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
 (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
 (define-key evil-normal-state-map (kbd "C-]") 'etags-select-find-tag-at-point)
 (define-key evil-visual-state-map (kbd "C-]") 'etags-select-find-tag-at-point)
+
+(require 'evil-numbers)
+(define-key evil-normal-state-map "+" 'evil-numbers/inc-at-pt)
+(define-key evil-normal-state-map "-" 'evil-numbers/dec-at-pt)
 
 (require 'evil-matchit)
 (global-evil-matchit-mode 1)
@@ -328,6 +354,8 @@ If the character before and after CH is space or tab, CH is NOT slash"
 ;;   You can either press `,ef` or `M-x end-of-defun` to execute it
 (require 'general)
 (general-evil-setup t)
+
+;; {{ use `,` as leader key
 (nvmap :prefix ","
        "=" 'increase-default-font-height ; GUI emacs only
        "-" 'decrease-default-font-height ; GUI emacs only
@@ -335,15 +363,7 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "bu" 'backward-up-list
        "bb" 'back-to-previous-buffer
        "ef" 'end-of-defun
-       "ddb" 'sdcv-search-pointer ; in buffer
-       "ddt" 'sdcv-search-input+ ;; in tip
-       "ddd" 'my-lookup-dict-org
-       "ddw" 'define-word
-       "ddp" 'define-word-at-point
        "mf" 'mark-defun
-       "mmm" 'mpc-which-song
-       "mmn" 'mpc-next-prev-song
-       "mmp" '(lambda () (interactive) (mpc-next-prev-song t))
        "em" 'erase-message-buffer
        "eb" 'eval-buffer
        "sd" 'sudo-edit
@@ -372,6 +392,8 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "trm" 'get-term
        "tff" 'toggle-frame-fullscreen
        "tfm" 'toggle-frame-maximized
+       "ti" 'fastdef-insert
+       "th" 'fastdef-insert-from-history
        ;; "ci" 'evilnc-comment-or-uncomment-lines
        ;; "cl" 'evilnc-comment-or-uncomment-to-the-line
        ;; "cc" 'evilnc-copy-and-comment-lines
@@ -380,35 +402,31 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "epl" 'emmet-expand-line
        "rd" 'evilmr-replace-in-defun
        "rb" 'evilmr-replace-in-buffer
-       "tt" 'evilmr-tag-selected-region ;; recommended
+       "ts" 'evilmr-tag-selected-region ;; recommended
        "rt" 'evilmr-replace-in-tagged-region ;; recommended
        "tua" 'artbollocks-mode
        "cby" 'cb-switch-between-controller-and-view
        "cbu" 'cb-get-url-from-controller
        "ht" 'etags-select-find-tag-at-point ; better than find-tag C-]
        "hp" 'etags-select-find-tag
-       "hm" 'counsel-bookmark-goto
+       "mm" 'counsel-bookmark-goto
+       "mk" 'bookmark-set
        "yy" 'browse-kill-ring
        "gf" 'counsel-git-find-file
+       "gc" 'counsel-git-find-file-committed-with-line-at-point
        "gl" 'counsel-git-grep-yank-line
-       "gg" 'counsel-git-grep ; quickest grep should be easy to press
+       "gg" 'counsel-git-grep-in-project ; quickest grep should be easy to press
+       "ga" 'counsel-git-grep-by-author
        "gm" 'counsel-git-find-my-file
+       "gs" 'ffip-show-diff ; find-file-in-project 5.0+
+       "sf" 'counsel-git-show-file
+       "sh" 'my-select-from-search-text-history
+       "df" 'counsel-git-diff-file
        "rjs" 'run-js
+       "jsr" 'js-send-region
        "rmz" 'run-mozilla
        "rpy" 'run-python
        "rlu" 'run-lua
-       "ud" 'my-gud-gdb
-       "uk" 'gud-kill-yes
-       "ur" 'gud-remove
-       "ub" 'gud-break
-       "uu" 'gud-run
-       "up" 'gud-print
-       "ue" 'gud-cls
-       "un" 'gud-next
-       "us" 'gud-step
-       "ui" 'gud-stepi
-       "uc" 'gud-cont
-       "uf" 'gud-finish
        "tci" 'toggle-company-ispell
        "kb" 'kill-buffer-and-window ;; "k" is preserved to replace "C-g"
        "it" 'issue-tracker-increment-issue-id-under-cursor
@@ -416,13 +434,13 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "lq" 'highlight-symbol-query-replace
        "ln" 'highlight-symbol-nav-mode ; use M-n/M-p to navigation between symbols
        "bm" 'pomodoro-start ;; beat myself
-       "im" 'counsel-imenu-goto
-       "ii" 'ido-imenu
+       "ii" 'counsel-imenu-goto
+       "im" 'ido-imenu
        "ij" 'rimenu-jump
        "." 'evil-ex
        ;; @see https://github.com/pidu/git-timemachine
        ;; p: previous; n: next; w:hash; W:complete hash; g:nth version; q:quit
-       "tmt" 'git-timemachine-toggle
+       "tt" 'my-git-timemachine
        "tdb" 'tidy-buffer
        "tdl" 'tidy-current-line
        ;; toggle overview,  @see http://emacs.wordpress.com/2007/01/16/quick-and-dirty-code-folding/
@@ -437,46 +455,36 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "cxi" 'org-clock-in ; `C-c C-x C-i'
        "cxo" 'org-clock-out ; `C-c C-x C-o'
        "cxr" 'org-clock-report ; `C-c C-x C-r'
-       "mq" 'lookup-doc-in-man
-       "sgg" 'w3m-google-search
-       "sgf" 'w3m-google-by-filetype
-       "sgd" 'w3m-search-financial-dictionary
-       "sgq" 'w3m-stackoverflow-search
-       "sgj" 'w3m-search-js-api-mdn
-       "sga" 'w3m-java-search
-       "sgh" 'w3mext-hacker-search ; code search in all engines with firefox
        "qq" 'my-grep
-       "gss" 'git-gutter:set-start-revision
-       "gsh" 'git-gutter-reset-to-head-parent
-       "gsr" 'git-gutter-reset-to-default
        "xc" 'save-buffers-kill-terminal
        "rr" 'counsel-recentf-goto
        "rh" 'counsel-yank-bash-history ; bash history command => yank-ring
-       "dfa" 'diff-region-tag-selected-as-a
-       "dfb" 'diff-region-compare-with-b
+       "rf" 'counsel-goto-recent-directory
+       "da" 'diff-region-tag-selected-as-a
+       "db" 'diff-region-compare-with-b
        "di" 'evilmi-delete-items
        "si" 'evilmi-select-items
        "jb" 'js-beautify
-       "jpp" 'js2-print-json-path
-       "se" 'string-edit-at-point
+       "jp" 'js2-print-json-path
+       "sep" 'string-edit-at-point
+       "sec" 'string-edit-conclude
+       "sea" 'string-edit-abort
        "xe" 'eval-last-sexp
        "x0" 'delete-window
        "x1" 'delete-other-windows
        "x2" 'split-window-vertically
        "x3" 'split-window-horizontally
-       "xrw" 'rotate-windows
-       "xru" 'undo-tree-save-state-to-register ; C-x r u
-       "xrU" 'undo-tree-restore-state-from-register ; C-x r U
+       "rw" 'rotate-windows
+       "ru" 'undo-tree-save-state-to-register ; C-x r u
+       "rU" 'undo-tree-restore-state-from-register ; C-x r U
        "xt" 'toggle-window-split
-       "su" 'winner-undo
-       "xu" 'winner-undo
+       "uu" 'winner-undo
+       "UU" 'winner-redo
        "to" 'toggle-web-js-offset
        "sl" 'sort-lines
        "ulr" 'uniquify-all-lines-region
        "ulb" 'uniquify-all-lines-buffer
-       "lo" 'moz-console-log-var
        "lj" 'moz-load-js-file-and-send-it
-       "lk" 'latest-kill-to-clipboard
        "mr" 'moz-console-clear
        "rnr" 'rinari-web-server-restart
        "rnc" 'rinari-find-controller
@@ -487,6 +495,8 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "rnl" 'rinari-find-log
        "rno" 'rinari-console
        "rnt" 'rinari-find-test
+       "fs" 'ffip-save-ivy-last
+       "fr" 'ffip-ivy-resume
        "ss" 'swiper-the-thing ; http://oremacs.com/2015/03/25/swiper-0.2.0/ for guide
        "hst" 'hs-toggle-fold
        "hsa" 'hs-toggle-fold-all
@@ -517,7 +527,6 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "om" 'toggle-org-or-message-mode
        "ut" 'undo-tree-visualize
        "ar" 'align-regexp
-       "ww" 'save-buffer
        "wrn" 'httpd-restart-now
        "wrd" 'httpd-restart-at-default-directory
        "bk" 'buf-move-up
@@ -539,71 +548,144 @@ If the character before and after CH is space or tab, CH is NOT slash"
        "xx" 'er/expand-region
        "xf" 'ido-find-file
        "xb" 'ido-switch-buffer
-       "vv" 'scroll-other-window
-       "vu" 'scroll-other-window-up
        "xh" 'mark-whole-buffer
        "xk" 'ido-kill-buffer
        "xs" 'save-buffer
        "xz" 'suspend-frame
-       "xvm" 'vc-rename-file-and-buffer
-       "xvc" 'vc-copy-file-and-rename-buffer
-       "xvv" 'vc-next-action
-       "xva" 'git-add-current-file
-       "xvp" 'git-push-remote-origin
-       "xvu" 'git-add-option-update
-       "xvg" 'vc-annotate
-       "xvs" 'git-gutter:stage-hunk
-       "xvr" 'git-gutter:revert-hunk
-       "xvl" 'vc-print-log
-       "xvb" 'git-messenger:popup-message
-       "xv=" 'git-gutter:popup-hunk
+       "vm" 'vc-rename-file-and-buffer
+       "vc" 'vc-copy-file-and-rename-buffer
+       "xvv" 'vc-next-action ; 'C-x v v' in original
+       "va" 'git-add-current-file
+       "vk" 'git-checkout-current-file
+       "vg" 'vc-annotate ; 'C-x v g' in original
+       "vs" 'git-gutter:stage-hunk
+       "vr" 'git-gutter:revert-hunk
+       "vl" 'vc-print-log
+       "vv" 'git-messenger:popup-message
+       "v=" 'git-gutter:popup-hunk
        "hh" 'cliphist-paste-item
        "yu" 'cliphist-select-item
+       "ih" 'my-goto-git-gutter ; use ivy-mode
+       "ir" 'ivy-resume
        "nn" 'my-goto-next-hunk
        "pp" 'my-goto-previous-hunk
-       "xnn" 'narrow-or-widen-dwim
+       "ww" 'narrow-or-widen-dwim
        "xnw" 'widen
        "xnd" 'narrow-to-defun
        "xnr" 'narrow-to-region
        "ycr" 'my-yas-reload-all
        "wf" 'popup-which-function)
+;; }}
 
+;; {{ Use `SPC` as leader key
 ;; all keywords arguments are still supported
 (nvmap :prefix "SPC"
-       "wc" 'wg-create-workgroup
-       "ws" 'my-wg-switch-workgroup
-       "jde" 'js2-display-error-list
-       "jne" 'js2-next-error
-       "jte" 'js2-mode-toggle-element
-       "jtf" 'js2-mode-toggle-hide-functions
-       "jeo" 'js2r-expand-object
-       "jco" 'js2r-contract-object
-       "jeu" 'js2r-expand-function
-       "jcu" 'js2r-contract-function
-       "jea" 'js2r-expand-array
-       "jca" 'js2r-contract-array
-       "jwi" 'js2r-wrap-buffer-in-iife
-       "jig" 'js2r-inject-global-in-iife
-       "jev" 'js2r-extract-var
-       "jiv" 'js2r-inline-var
-       "jrv" 'js2r-rename-var
-       "jvt" 'js2r-var-to-this
-       "jag" 'js2r-add-to-globals-annotation
-       "jsv" 'js2r-split-var-declaration
-       "jss" 'js2r-split-string
-       "jef" 'js2r-extract-function
-       "jem" 'js2r-extract-method
-       "jip" 'js2r-introduce-parameter
-       "jlp" 'js2r-localize-parameter
-       "jtf" 'js2r-toggle-function-expression-and-declaration
-       "jao" 'js2r-arguments-to-object
-       "juw" 'js2r-unwrap
-       "jwl" 'js2r-wrap-in-for-loop
-       "j3i" 'js2r-ternary-to-if
-       "jlt" 'js2r-log-this
-       "jsl" 'js2r-forward-slurp
-       "jba" 'js2r-forward-barf
-       "jk" 'js2r-kill)
+       "ss" 'wg-create-workgroup ; save windows layout
+       "ll" 'my-wg-switch-workgroup ; load windows layout
+       "kk" 'scroll-other-window
+       "jj" 'scroll-other-window-up
+       "yy" 'hydra-launcher/body
+       "tt" 'my-toggle-indentation
+       "gs" 'git-gutter:set-start-revision
+       "gh" 'git-gutter-reset-to-head-parent
+       "gr" 'git-gutter-reset-to-default
+       "ud" 'my-gud-gdb
+       "uk" 'gud-kill-yes
+       "ur" 'gud-remove
+       "ub" 'gud-break
+       "uu" 'gud-run
+       "up" 'gud-print
+       "ue" 'gud-cls
+       "un" 'gud-next
+       "us" 'gud-step
+       "ui" 'gud-stepi
+       "uc" 'gud-cont
+       "uf" 'gud-finish)
+
+;; per-major-mode leader setup
+(general-define-key :states '(normal motion insert emacs)
+                    :keymaps 'js2-mode-map
+                    :prefix "SPC"
+                    :non-normal-prefix "M-SPC"
+                    "de" 'js2-display-error-list
+                    "nn" 'js2-next-error
+                    "te" 'js2-mode-toggle-element
+                    "tf" 'js2-mode-toggle-hide-functions
+                    "jeo" 'js2r-expand-object
+                    "jco" 'js2r-contract-object
+                    "jeu" 'js2r-expand-function
+                    "jcu" 'js2r-contract-function
+                    "jea" 'js2r-expand-array
+                    "jca" 'js2r-contract-array
+                    "jwi" 'js2r-wrap-buffer-in-iife
+                    "jig" 'js2r-inject-global-in-iife
+                    "jev" 'js2r-extract-var
+                    "jiv" 'js2r-inline-var
+                    "jrv" 'js2r-rename-var
+                    "jvt" 'js2r-var-to-this
+                    "jag" 'js2r-add-to-globals-annotation
+                    "jsv" 'js2r-split-var-declaration
+                    "jss" 'js2r-split-string
+                    "jef" 'js2r-extract-function
+                    "jem" 'js2r-extract-method
+                    "jip" 'js2r-introduce-parameter
+                    "jlp" 'js2r-localize-parameter
+                    "jtf" 'js2r-toggle-function-expression-and-declaration
+                    "jao" 'js2r-arguments-to-object
+                    "juw" 'js2r-unwrap
+                    "jwl" 'js2r-wrap-in-for-loop
+                    "j3i" 'js2r-ternary-to-if
+                    "jlt" 'js2r-log-this
+                    "jsl" 'js2r-forward-slurp
+                    "jba" 'js2r-forward-barf
+                    "jk" 'js2r-kill)
+;; }}
+
+;; {{ Use `;` as leader key, for searching something
+(nvmap :prefix ";"
+       ";" 'avy-goto-subword-1
+       "db" 'sdcv-search-pointer ; in buffer
+       "dt" 'sdcv-search-input+ ;; in tip
+       "dd" 'my-lookup-dict-org
+       "dw" 'define-word
+       "dp" 'define-word-at-point
+       "mm" 'lookup-doc-in-man
+       "gg" 'w3m-google-search
+       "gf" 'w3m-google-by-filetype
+       "gd" 'w3m-search-financial-dictionary
+       "gj" 'w3m-search-js-api-mdn
+       "ga" 'w3m-java-search
+       "gh" 'w3mext-hacker-search ; code search in all engines with firefox
+       "gq" 'w3m-stackoverflow-search
+       "mm" 'mpc-which-song
+       "mn" 'mpc-next-prev-song
+       "mp" '(lambda () (interactive) (mpc-next-prev-song t)))
+;; }}
+
+;; {{ remember what we searched
+;; http://emacs.stackexchange.com/questions/24099/how-to-yank-text-to-search-command-after-in-evil-mode/
+(defvar my-search-text-history nil "List of text I searched.")
+(defun my-select-from-search-text-history ()
+  (interactive)
+  (ivy-read "Search text history:" my-search-text-history
+            :action (lambda (item)
+                      (copy-yank-str item)
+                      (message "%s => clipboard & yank ring" item))))
+(defun my-cc-isearch-string ()
+  (interactive)
+  (if (and isearch-string (> (length isearch-string) 0))
+      ;; NOT pollute clipboard who has things to paste into Emacs
+      (add-to-list 'my-search-text-history isearch-string)))
+
+(defadvice evil-search-incrementally (after evil-search-incrementally-after-hack activate)
+  (my-cc-isearch-string))
+
+(defadvice evil-search-word (after evil-search-word-after-hack activate)
+  (my-cc-isearch-string))
+
+(defadvice evil-visualstar/begin-search (after evil-visualstar/begin-search-after-hack activate)
+  (my-cc-isearch-string))
+;; }}
 
 ;; change mode-line color by evil state
 (lexical-let ((default-color (cons (face-background 'mode-line)
@@ -621,4 +703,11 @@ If the character before and after CH is space or tab, CH is NOT slash"
 (require 'evil-nerd-commenter)
 (evilnc-default-hotkeys)
 
+;; {{ evil-exchange
+;; press gx twice to exchange, gX to cancel
+(require 'evil-exchange)
+;; change default key bindings (if you want) HERE
+;; (setq evil-exchange-key (kbd "zx"))
+(evil-exchange-install)
+;; }}
 (provide 'init-evil)
